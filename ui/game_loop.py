@@ -77,42 +77,75 @@ def run_game(difficulty="easy", network=None, is_host=False):
         board.move_piece(move)
 
     if difficulty == "online":
-        if is_host:
-            network.on_receive = receive_move
-        else:
-            network.on_receive = receive_move
+        network.on_receive = receive_move
 
     running = True
+    game_over = False
+    message = ""
+
     while running:
         clock.tick(60)
 
-        # === IA (noir)
-        if difficulty in ["easy", "normal", "hard"] and board.turn == "black":
-            if difficulty == "easy":
-                move = get_random_move(board)
-            elif difficulty == "normal":
-                move = get_minimax_move(board, depth=2)
-            elif difficulty == "hard":
-                move = get_best_move_alphabeta(board, depth=3)
-            else:
-                move = None
+        if not game_over:
+            # === IA (noir)
+            if difficulty in ["easy", "normal", "hard"] and board.turn == "black":
+                if difficulty == "easy":
+                    move = get_random_move(board)
+                elif difficulty == "normal":
+                    move = get_minimax_move(board, depth=2)
+                elif difficulty == "hard":
+                    move = get_best_move_alphabeta(board, depth=3)
+                else:
+                    move = None
 
-            if move:
-                board.move_piece(move)
-                selected_piece = None
-                selected_pos = None
-                legal_moves = []
+                if move:
+                    board.move_piece(move)
+                    selected_piece = None
+                    selected_pos = None
+                    legal_moves = []
 
         draw_board(screen)
         highlight_squares(screen, selected_pos, legal_moves)
         draw_pieces(screen, board)
+
+        # Affichage "Échec"
+        if not game_over and board.is_in_check(board.turn):
+            font = pygame.font.SysFont("segoeui", 28)
+            text = font.render("Échec !", True, (255, 0, 0))
+            screen.blit(text, (WIDTH//2 - text.get_width()//2, 10))
+
+        # Vérifier fin de partie
+        if not game_over:
+            if board.is_checkmate(board.turn):
+                winner = "Blancs" if board.turn == "black" else "Noirs"
+                message = f"Échec et mat ! {winner} gagnent"
+                game_over = True
+
+            elif board.is_stalemate(board.turn):
+                message = "Pat ! Match nul"
+                game_over = True
+
+        if game_over:
+            # Fond semi-transparent
+            overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+            overlay.fill((0, 0, 0, 160))
+            screen.blit(overlay, (0, 0))
+
+            # Cadre central
+            pygame.draw.rect(screen, (30, 30, 30), (200, 300, 400, 200), border_radius=12)
+            pygame.draw.rect(screen, (255, 255, 255), (200, 300, 400, 200), width=3, border_radius=12)
+
+            font = pygame.font.SysFont("segoeui", 36)
+            msg = font.render(message, True, (255, 255, 255))
+            screen.blit(msg, (WIDTH//2 - msg.get_width()//2, 380))
+
         pygame.display.flip()
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
 
-            elif event.type == pygame.MOUSEBUTTONDOWN:
+            elif not game_over and event.type == pygame.MOUSEBUTTONDOWN:
                 x, y = pygame.mouse.get_pos()
                 col = x // SQUARE_SIZE
                 row = y // SQUARE_SIZE
@@ -136,12 +169,12 @@ def run_game(difficulty="easy", network=None, is_host=False):
                     if not move_made and clicked_piece and clicked_piece.color == board.turn:
                         selected_piece = clicked_piece
                         selected_pos = clicked_pos
-                        legal_moves = selected_piece.get_legal_moves(board)
+                        legal_moves = board.get_valid_moves(selected_piece)
 
                 else:
                     if clicked_piece and clicked_piece.color == board.turn:
                         selected_piece = clicked_piece
                         selected_pos = clicked_pos
-                        legal_moves = selected_piece.get_legal_moves(board)
+                        legal_moves = board.get_valid_moves(selected_piece)
 
     pygame.quit()
