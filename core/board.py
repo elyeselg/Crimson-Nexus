@@ -1,7 +1,7 @@
-from core.pieces import (
-    Pawn, Rook, Knight, Bishop, Queen, King
-)
+from core.pieces import Pawn, Rook, Knight, Bishop, Queen, King
 from core.move import Move
+import copy
+
 
 class Board:
     def __init__(self):
@@ -19,32 +19,25 @@ class Board:
             "King": King
         }
         self.setup_board()
+        self._checking_check = False  # Pour bloquer le roque quand on vérifie l'échec
 
     def setup_board(self):
         for col in range(8):
             self.board[1][col] = Pawn('black', (1, col))
             self.board[6][col] = Pawn('white', (6, col))
 
-        self.board[0][0] = Rook('black', (0, 0))
-        self.board[0][7] = Rook('black', (0, 7))
-        self.board[7][0] = Rook('white', (7, 0))
-        self.board[7][7] = Rook('white', (7, 7))
+        placements = [
+            (Rook, [0, 7]),
+            (Knight, [1, 6]),
+            (Bishop, [2, 5]),
+            (Queen, [3]),
+            (King, [4]),
+        ]
 
-        self.board[0][1] = Knight('black', (0, 1))
-        self.board[0][6] = Knight('black', (0, 6))
-        self.board[7][1] = Knight('white', (7, 1))
-        self.board[7][6] = Knight('white', (7, 6))
-
-        self.board[0][2] = Bishop('black', (0, 2))
-        self.board[0][5] = Bishop('black', (0, 5))
-        self.board[7][2] = Bishop('white', (7, 2))
-        self.board[7][5] = Bishop('white', (7, 5))
-
-        self.board[0][3] = Queen('black', (0, 3))
-        self.board[7][3] = Queen('white', (7, 3))
-
-        self.board[0][4] = King('black', (0, 4))
-        self.board[7][4] = King('white', (7, 4))
+        for cls, cols in placements:
+            for col in cols:
+                self.board[0][col] = cls('black', (0, col))
+                self.board[7][col] = cls('white', (7, col))
 
     def get_piece(self, pos):
         row, col = pos
@@ -57,9 +50,9 @@ class Board:
         end_row, end_col = move.end_pos
 
         piece = self.board[start_row][start_col]
-        captured = self.board[end_row][end_col]
+        captured = move.piece_captured
 
-        # Gérer le roque : déplace aussi la tour
+        # === Roque ===
         if move.is_castling and isinstance(piece, King):
             if end_col == 6:  # Petit roque
                 self.board[end_row][5] = self.board[end_row][7]
@@ -70,85 +63,87 @@ class Board:
                 self.board[end_row][0] = None
                 self.board[end_row][3].pos = (end_row, 3)
 
-        # Déplacement normal
-        self.board[end_row][end_col] = piece
-        self.board[start_row][start_col] = None
-        piece.pos = (end_row, end_col)
+        # === Prise en passant ===
+        if move.is_en_passant and isinstance(piece, Pawn):
+            capture_row = start_row
+            capture_col = end_col
+            captured = self.board[capture_row][capture_col]
+            self.board[capture_row][capture_col] = None
 
-        if hasattr(piece, 'has_moved'):
+        # === Promotion ===
+        if move.promotion and isinstance(piece, Pawn):
+            promoted_piece = self.piece_classes[move.promotion](piece.color, (end_row, end_col))
+            self.board[end_row][end_col] = promoted_piece
+        else:
+            self.board[end_row][end_col] = piece
+            piece.pos = (end_row, end_col)
+
+        self.board[start_row][start_col] = None
+
+        if hasattr(piece, "has_moved"):
             piece.has_moved = True
         if isinstance(piece, Pawn):
             piece.first_move = False
 
         if isinstance(piece, King):
-            if piece.color == 'white':
+            if piece.color == "white":
                 self.white_king_pos = (end_row, end_col)
             else:
                 self.black_king_pos = (end_row, end_col)
 
         move.piece_captured = captured
         self.move_history.append(move)
-
         self.turn = 'black' if self.turn == 'white' else 'white'
 
     def get_all_pieces(self, color):
         return [p for row in self.board for p in row if p and p.color == color]
 
     def get_valid_moves(self, piece):
-        legal_moves = piece.get_legal_moves(self)
-        valid = []
-        for move in legal_moves:
+        valid_moves = []
+        for move in piece.get_legal_moves(self):
             temp = self.copy()
-            temp.move_piece(move)
+            temp.move_piece(copy.deepcopy(move))
             if not temp.is_in_check(piece.color):
-                valid.append(move)
-        return valid
+                valid_moves.append(move)
+        return valid_moves
 
     def is_in_check(self, color):
+        self._checking_check = True
         king_pos = self.white_king_pos if color == 'white' else self.black_king_pos
         enemy_color = 'black' if color == 'white' else 'white'
-        for piece in self.get_all_pieces(enemy_color):
-            for move in piece.get_legal_moves(self):
-                if move.end_pos == king_pos:
-                    return True
-        return False
+
+        try:
+            for piece in self.get_all_pieces(enemy_color):
+                for move in piece.get_legal_moves(self):
+                    if move.end_pos == king_pos:
+                        return True
+            return False
+        finally:
+            self._checking_check = False
 
     def square_under_attack(self, pos, color):
         enemy_color = 'black' if color == 'white' else 'white'
-        for piece in self.get_all_pieces(enemy_color):
-            for move in piece.get_legal_moves(self):
+        for enemy in self.get_all_pieces(enemy_color):
+            for move in enemy.get_legal_moves(self):
                 if move.end_pos == pos:
                     return True
         return False
 
     def is_checkmate(self, color):
-        if not self.is_in_check(color):
-            return False
-        for piece in self.get_all_pieces(color):
-            if self.get_valid_moves(piece):
-                return False
-        return True
+        return self.is_in_check(color) and all(
+            not self.get_valid_moves(piece) for piece in self.get_all_pieces(color)
+        )
 
     def is_stalemate(self, color):
-        if self.is_in_check(color):
-            return False
-        for piece in self.get_all_pieces(color):
-            if self.get_valid_moves(piece):
-                return False
-        return True
+        return not self.is_in_check(color) and all(
+            not self.get_valid_moves(piece) for piece in self.get_all_pieces(color)
+        )
 
     def copy(self):
-        import copy
         return copy.deepcopy(self)
 
     def __str__(self):
-        rows = []
-        for row in self.board:
-            line = []
-            for piece in row:
-                if piece:
-                    line.append(piece.symbol)
-                else:
-                    line.append('.')
-            rows.append(" ".join(line))
-        return "\n".join(rows)
+        return "\n".join(
+            " ".join(piece.symbol if piece else "." for piece in row)
+            for row in self.board
+        )

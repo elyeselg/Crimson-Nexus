@@ -1,11 +1,12 @@
+from core.rules import get_legal_moves
+
 class Piece:
     def __init__(self, color, pos):
-        self.color = color          # 'white' ou 'black'
-        self.pos = pos              # (row, col)
-        self.symbol = ''            # Pour affichage éventuel
+        self.color = color              # 'white' ou 'black'
+        self.pos = pos                  # (row, col)
+        self.symbol = ''                # Pour affichage console ou debug
 
     def get_legal_moves(self, board):
-        from core.rules import get_legal_moves
         return get_legal_moves(self, board)
 
     def __repr__(self):
