@@ -1,21 +1,19 @@
+# ai/base_ai.py
+
 import random
-from core.move import Move
 
 def get_random_move(board_obj):
-    """Renvoie un coup aléatoire pour l'IA noire"""
+    """Renvoie un coup aléatoire légal pour l'IA noire"""
     all_moves = []
 
-    # On récupère toutes les pièces de la couleur à jouer
-    pieces = board_obj.get_all_pieces(board_obj.turn)
+    pieces = board_obj.get_all_pieces("black")
 
     for piece in pieces:
-        moves = piece.get_legal_moves(board_obj)
+        moves = board_obj.get_valid_moves(piece)
         if moves:
             all_moves.extend(moves)
 
-    # Choisir un coup au hasard parmi tous les coups légaux
     if all_moves:
         return random.choice(all_moves)
 
-    # Aucun coup possible (échec et mat ou pat)
-    return None
+    return None  # Aucun coup possible (mat ou pat)

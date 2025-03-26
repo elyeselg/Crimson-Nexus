@@ -1,9 +1,10 @@
 import pygame
+import time
 from core.board import Board
 from core.move import Move
 
 from ai.base_ai import get_random_move
-from ai.minimax import get_minimax_move
+from ai.negamax import get_negamax_move
 from ai.evaluator import get_best_move_alphabeta
 from network.network import GameServer, GameClient
 
@@ -82,56 +83,59 @@ def run_game(difficulty="easy", network=None, is_host=False):
     running = True
     game_over = False
     message = ""
+    ai_thinking = False
+    ai_move_start_time = 0
+    ai_move = None
 
     while running:
         clock.tick(60)
 
         if not game_over:
-            # === IA (noir)
             if difficulty in ["easy", "normal", "hard"] and board.turn == "black":
-                if difficulty == "easy":
-                    move = get_random_move(board)
-                elif difficulty == "normal":
-                    move = get_minimax_move(board, depth=2)
-                elif difficulty == "hard":
-                    move = get_best_move_alphabeta(board, depth=3)
-                else:
-                    move = None
+                if not ai_thinking:
+                    ai_thinking = True
+                    ai_move_start_time = time.time()
 
-                if move:
-                    board.move_piece(move)
-                    selected_piece = None
-                    selected_pos = None
-                    legal_moves = []
+                    if difficulty == "easy":
+                        ai_move = get_random_move(board)
+                    elif difficulty == "normal":
+                        ai_move = get_negamax_move(board, depth=2)
+                    elif difficulty == "hard":
+                        ai_move = get_best_move_alphabeta(board, depth=3)
+                else:
+                    # Laisser 0.6 sec pour "réfléchir"
+                    if time.time() - ai_move_start_time >= 0.6:
+                        if ai_move:
+                            board.move_piece(ai_move)
+                        selected_piece = None
+                        selected_pos = None
+                        legal_moves = []
+                        ai_thinking = False
+                        ai_move = None
 
         draw_board(screen)
         highlight_squares(screen, selected_pos, legal_moves)
         draw_pieces(screen, board)
 
-        # Affichage "Échec"
         if not game_over and board.is_in_check(board.turn):
             font = pygame.font.SysFont("segoeui", 28)
             text = font.render("Échec !", True, (255, 0, 0))
             screen.blit(text, (WIDTH//2 - text.get_width()//2, 10))
 
-        # Vérifier fin de partie
         if not game_over:
             if board.is_checkmate(board.turn):
                 winner = "Blancs" if board.turn == "black" else "Noirs"
                 message = f"Échec et mat ! {winner} gagnent"
                 game_over = True
-
             elif board.is_stalemate(board.turn):
                 message = "Pat ! Match nul"
                 game_over = True
 
         if game_over:
-            # Fond semi-transparent
             overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
             overlay.fill((0, 0, 0, 160))
             screen.blit(overlay, (0, 0))
 
-            # Cadre central
             pygame.draw.rect(screen, (30, 30, 30), (200, 300, 400, 200), border_radius=12)
             pygame.draw.rect(screen, (255, 255, 255), (200, 300, 400, 200), width=3, border_radius=12)
 
@@ -145,7 +149,7 @@ def run_game(difficulty="easy", network=None, is_host=False):
             if event.type == pygame.QUIT:
                 running = False
 
-            elif not game_over and event.type == pygame.MOUSEBUTTONDOWN:
+            elif not game_over and event.type == pygame.MOUSEBUTTONDOWN and not ai_thinking:
                 x, y = pygame.mouse.get_pos()
                 col = x // SQUARE_SIZE
                 row = y // SQUARE_SIZE
