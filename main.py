@@ -1,3 +1,6 @@
+import pygame
+pygame.init()
+
 from ui.menu import run_menu
 
 if __name__ == "__main__":

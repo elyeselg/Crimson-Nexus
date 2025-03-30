@@ -1,25 +1,23 @@
 import pygame
 import time
+import threading
 from core.board import Board
 from core.move import Move
-
 from ai.base_ai import get_random_move
 from ai.negamax import get_negamax_move
-from ai.evaluator import get_best_move_alphabeta
+from ai.strong_fast_ai import get_fast_strong_ai_move
 from network.network import GameServer, GameClient
 
-# === Constantes ===
-WIDTH, HEIGHT = 800, 800
-SQUARE_SIZE = WIDTH // 8
+WIDTH, HEIGHT = 1000, 800
+SQUARE_SIZE = 800 // 8
 PIECE_IMAGES = {}
 
-# === Couleurs ===
 WHITE = (245, 245, 245)
 GRAY = (160, 160, 160)
 GREEN = (50, 200, 50)
 HIGHLIGHT = (0, 150, 255)
+BLACK = (30, 30, 30)
 
-# === Chargement des images de pièces ===
 def load_images():
     types = ['pawn', 'rook', 'knight', 'bishop', 'queen', 'king']
     colors = ['white', 'black']
@@ -30,14 +28,12 @@ def load_images():
             image = pygame.image.load(path)
             PIECE_IMAGES[name] = pygame.transform.scale(image, (SQUARE_SIZE, SQUARE_SIZE))
 
-
 def draw_board(screen):
     colors = [WHITE, GRAY]
     for row in range(8):
         for col in range(8):
             color = colors[(row + col) % 2]
             pygame.draw.rect(screen, color, (col * SQUARE_SIZE, row * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE))
-
 
 def draw_pieces(screen, board):
     for row in range(8):
@@ -49,7 +45,6 @@ def draw_pieces(screen, board):
                 if image:
                     screen.blit(image, (col * SQUARE_SIZE, row * SQUARE_SIZE))
 
-
 def highlight_squares(screen, selected_pos, legal_moves):
     if selected_pos:
         row, col = selected_pos
@@ -60,18 +55,34 @@ def highlight_squares(screen, selected_pos, legal_moves):
         center = (end_col * SQUARE_SIZE + SQUARE_SIZE // 2, end_row * SQUARE_SIZE + SQUARE_SIZE // 2)
         pygame.draw.circle(screen, GREEN, center, 10)
 
+def format_move(move):
+    def to_alg(pos):
+        row, col = pos
+        return f"{chr(col + 97)}{8 - row}"
+    return f"{to_alg(move.start_pos)} → {to_alg(move.end_pos)}"
+
+def draw_move_history(screen, move_history):
+    font = pygame.font.SysFont("segoeui", 22)
+    x = 810
+    y = 20
+    screen.fill((240, 240, 240), (800, 0, 200, HEIGHT))
+    screen.blit(font.render("Historique", True, BLACK), (x, y))
+    y += 30
+    for i, move in enumerate(move_history):
+        text = font.render(f"{(i // 2) + 1}. {format_move(move)}", True, BLACK)
+        screen.blit(text, (x, y))
+        y += 25
 
 def run_game(difficulty="easy", network=None, is_host=False):
     pygame.init()
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
-    pygame.display.set_caption("Crimson Nexus – Partie en cours")
+    pygame.display.set_caption("Crimson Nexus – Partie")
     clock = pygame.time.Clock()
 
     board = Board()
     selected_piece = None
     selected_pos = None
     legal_moves = []
-
     load_images()
 
     def receive_move(move):
@@ -83,39 +94,41 @@ def run_game(difficulty="easy", network=None, is_host=False):
     running = True
     game_over = False
     message = ""
-    ai_thinking = False
-    ai_move_start_time = 0
     ai_move = None
+    ai_thread = None
+    ai_thinking = False
+
+    def ai_logic():
+        nonlocal ai_move, ai_thinking
+        if difficulty == "easy":
+            ai_move = get_random_move(board)
+        elif difficulty == "normal":
+            ai_move = get_negamax_move(board, depth=2)
+        elif difficulty == "hard":
+            ai_move = get_fast_strong_ai_move(board, depth=3)
+        elif difficulty == "very_hard":
+            ai_move = get_fast_strong_ai_move(board, depth=4)
+        ai_thinking = False
 
     while running:
         clock.tick(60)
 
-        if not game_over:
-            if difficulty in ["easy", "normal", "hard"] and board.turn == "black":
-                if not ai_thinking:
-                    ai_thinking = True
-                    ai_move_start_time = time.time()
-
-                    if difficulty == "easy":
-                        ai_move = get_random_move(board)
-                    elif difficulty == "normal":
-                        ai_move = get_negamax_move(board, depth=2)
-                    elif difficulty == "hard":
-                        ai_move = get_best_move_alphabeta(board, depth=3)
-                else:
-                    # Laisser 0.6 sec pour "réfléchir"
-                    if time.time() - ai_move_start_time >= 0.6:
-                        if ai_move:
-                            board.move_piece(ai_move)
-                        selected_piece = None
-                        selected_pos = None
-                        legal_moves = []
-                        ai_thinking = False
-                        ai_move = None
+        if not game_over and difficulty in ["easy", "normal", "hard", "very_hard"] and board.turn == "black":
+            if not ai_thinking and ai_move is None:
+                ai_thinking = True
+                ai_thread = threading.Thread(target=ai_logic)
+                ai_thread.start()
+            elif ai_move:
+                board.move_piece(ai_move)
+                ai_move = None
+                selected_piece = None
+                selected_pos = None
+                legal_moves = []
 
         draw_board(screen)
         highlight_squares(screen, selected_pos, legal_moves)
         draw_pieces(screen, board)
+        draw_move_history(screen, board.move_history)
 
         if not game_over and board.is_in_check(board.turn):
             font = pygame.font.SysFont("segoeui", 28)
@@ -135,10 +148,8 @@ def run_game(difficulty="easy", network=None, is_host=False):
             overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
             overlay.fill((0, 0, 0, 160))
             screen.blit(overlay, (0, 0))
-
             pygame.draw.rect(screen, (30, 30, 30), (200, 300, 400, 200), border_radius=12)
             pygame.draw.rect(screen, (255, 255, 255), (200, 300, 400, 200), width=3, border_radius=12)
-
             font = pygame.font.SysFont("segoeui", 36)
             msg = font.render(message, True, (255, 255, 255))
             screen.blit(msg, (WIDTH//2 - msg.get_width()//2, 380))
@@ -153,6 +164,8 @@ def run_game(difficulty="easy", network=None, is_host=False):
                 x, y = pygame.mouse.get_pos()
                 col = x // SQUARE_SIZE
                 row = y // SQUARE_SIZE
+                if col >= 8:
+                    continue
                 clicked_pos = (row, col)
                 clicked_piece = board.get_piece(clicked_pos)
 
