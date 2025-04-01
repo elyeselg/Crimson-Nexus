@@ -4,176 +4,137 @@ from ui.game_loop import run_game
 from network.network import GameServer, GameClient
 import pygame_textinput
 
-# === Couleurs ===
+# === CONFIG ===
+WIDTH, HEIGHT = 1000, 800
+BUTTON_WIDTH, BUTTON_HEIGHT = 320, 70
+BUTTON_RADIUS = 14
+
+# === COULEURS ===
 WHITE = (255, 255, 255)
-SOFT_GRAY = (245, 245, 245)
-DARK_TEXT = (50, 50, 50)
-ACCENT = (0, 122, 255)
-ACCENT_HOVER = (0, 102, 210)
-GREEN = (70, 200, 70)
-ORANGE = (240, 160, 60)
-RED = (220, 70, 70)
+DARK = (25, 25, 25)
+HIGHLIGHT = (0, 120, 240)
+SOFT_BLUE = (100, 160, 255)
+GRAY = (180, 180, 180)
 
-WIDTH, HEIGHT = 800, 800
-BUTTON_WIDTH = 280
-BUTTON_HEIGHT = 60
-BUTTON_RADIUS = 12
-
+# === INIT ===
 pygame.init()
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Crimson Nexus – Menu")
-font_title = pygame.font.SysFont("segoeui", 58, bold=False)
+font_title = pygame.font.SysFont("segoeui", 64, bold=True)
 font_button = pygame.font.SysFont("segoeui", 28)
-
 clock = pygame.time.Clock()
 
+# === MUSIQUE ===
+pygame.mixer.init()
+try:
+    pygame.mixer.music.load("assets/music/menu_theme.mp3")
+    pygame.mixer.music.set_volume(0.3)
+    pygame.mixer.music.play(-1)
+except Exception as e:
+    print("🎵 Erreur de chargement de la musique :", e)
 
-class Button:
-    def __init__(self, text, x, y, callback, color, hover_color):
-        self.text = text
-        self.rect = pygame.Rect(x, y, BUTTON_WIDTH, BUTTON_HEIGHT)
-        self.callback = callback
-        self.color = color
-        self.hover_color = hover_color
-        self.hovered = False
-        self.alpha = 0
-        self.visible = False
-
-    def draw(self, surface):
-        if not self.visible:
-            return
-
-        shadow_rect = self.rect.copy()
-        shadow_rect.move_ip(2, 2)
-        pygame.draw.rect(surface, (180, 180, 180), shadow_rect, border_radius=BUTTON_RADIUS)
-
-        color = self.hover_color if self.hovered else self.color
-        pygame.draw.rect(surface, color, self.rect, border_radius=BUTTON_RADIUS)
-
-        text_surf = font_button.render(self.text, True, WHITE)
-        text_rect = text_surf.get_rect(center=self.rect.center)
-        surface.blit(text_surf, text_rect)
-
-    def check_hover(self, mouse_pos):
-        if not self.visible:
-            return
-        self.hovered = self.rect.collidepoint(mouse_pos)
-
-    def check_click(self, mouse_pos):
-        if self.visible and self.rect.collidepoint(mouse_pos):
-            self.callback()
-
-    def animate_in(self, speed=10):
-        if self.alpha < 255:
-            self.alpha += speed
-            if self.alpha > 255:
-                self.alpha = 255
-
+# === UTIL ===
+def load_icon(path, size=(40, 40)):
+    img = pygame.image.load(path).convert_alpha()
+    return pygame.transform.smoothscale(img, size)
 
 def quit_game():
     pygame.quit()
     sys.exit()
 
+# === BOUTON ICONIQUE ===
+class IconButton:
+    def __init__(self, text, icon_path, y, callback, color=HIGHLIGHT):
+        self.text = text
+        self.icon = load_icon(icon_path)
+        self.callback = callback
+        self.color = color
+        self.base_color = color
+        self.hover_color = tuple(min(c + 40, 255) for c in color)
+        self.hovered = False
+        self.rect = pygame.Rect(WIDTH // 2 - BUTTON_WIDTH // 2, y, BUTTON_WIDTH, BUTTON_HEIGHT)
 
+    def draw(self, surface):
+        bg = self.hover_color if self.hovered else self.base_color
+        pygame.draw.rect(surface, bg, self.rect, border_radius=BUTTON_RADIUS)
+        surface.blit(self.icon, (self.rect.x + 15, self.rect.y + 15))
+        text_surface = font_button.render(self.text, True, WHITE)
+        surface.blit(text_surface, (self.rect.x + 70, self.rect.y + (BUTTON_HEIGHT - text_surface.get_height()) // 2))
+
+    def check_hover(self, pos):
+        self.hovered = self.rect.collidepoint(pos)
+
+    def check_click(self, pos):
+        if self.rect.collidepoint(pos):
+            self.callback()
+
+# === MENU PRINCIPAL ===
 def run_menu():
     state = "main"
     server = None
     client = None
-
     ip_input = pygame_textinput.TextInputVisualizer()
     ip_input.value = "127.0.0.1"
 
-    def switch_to_ia():
-        nonlocal state
-        state = "ia_choice"
-        for btn in ia_buttons:
-            btn.visible = True
-            btn.alpha = 0
-
-    def switch_to_multiplayer():
-        nonlocal state
-        state = "multiplayer"
-        for btn in multiplayer_buttons:
-            btn.visible = True
-            btn.alpha = 0
-        ip_input.value = "127.0.0.1"
-
-    def switch_to_main():
-        nonlocal state
-        state = "main"
-        for btn in ia_buttons + multiplayer_buttons:
-            btn.visible = False
+    def start_vs_ai():
+        run_game(difficulty="easy")  # difficulté unique maintenant
 
     def start_host():
         nonlocal server
         server = GameServer()
         server.start()
-        print("🟢 Serveur lancé. En attente de connexion...")
         run_game(difficulty="online", network=server, is_host=True)
 
     def start_client(ip):
         nonlocal client
-        client = GameClient(host=ip)
+        client = GameClient(ip)
         client.connect()
-        print(f"🔵 Client connecté à {ip}")
-        run_game(difficulty="online", network=client, is_host=False)
+        run_game(difficulty="online", network=client)
 
-    # === Boutons ===
+    mp_buttons = [
+        IconButton("Créer un salon", "assets/icons/multiplayer.png", 300, start_host, HIGHLIGHT),
+        IconButton("Rejoindre un salon", "assets/icons/multiplayer.png", 390, lambda: start_client(ip_input.value), SOFT_BLUE),
+        IconButton("← Retour", "assets/icons/back.png", 490, lambda: switch_state("main"), GRAY)
+    ]
+
+    def switch_state(new_state):
+        nonlocal state
+        state = new_state
+
     main_buttons = [
-        Button("Jouer contre l'IA", WIDTH // 2 - BUTTON_WIDTH // 2, 300, switch_to_ia, (40, 120, 240), (30, 100, 220)),
-        Button("Multijoueur", WIDTH // 2 - BUTTON_WIDTH // 2, 380, switch_to_multiplayer, (80, 80, 80), (100, 100, 100)),
-        Button("Quitter", WIDTH // 2 - BUTTON_WIDTH // 2, 460, quit_game, (200, 60, 60), (240, 80, 80)),
+        IconButton("Jouer contre l'IA", "assets/icons/ai.png", 300, start_vs_ai),
+        IconButton("Multijoueur", "assets/icons/multiplayer.png", 390, lambda: switch_state("mp")),
+        IconButton("Quitter", "assets/icons/quit.png", 480, quit_game)
     ]
-
-    ia_buttons = [
-        Button("Facile", WIDTH // 2 - BUTTON_WIDTH // 2, 320, lambda: run_game("easy"), GREEN, (50, 255, 50)),
-        Button("Normal", WIDTH // 2 - BUTTON_WIDTH // 2, 400, lambda: run_game("normal"), ORANGE, (255, 180, 80)),
-        Button("Difficile", WIDTH // 2 - BUTTON_WIDTH // 2, 480, lambda: run_game("hard"), RED, (255, 90, 90)),
-        Button("← Retour", WIDTH // 2 - BUTTON_WIDTH // 2, 560, switch_to_main, ACCENT, ACCENT_HOVER),
-    ]
-
-    multiplayer_buttons = [
-        Button("Créer un salon (hôte)", WIDTH // 2 - BUTTON_WIDTH // 2, 320, start_host, ACCENT, ACCENT_HOVER),
-        Button("Rejoindre un salon", WIDTH // 2 - BUTTON_WIDTH // 2, 400, lambda: start_client(ip_input.value), ACCENT, ACCENT_HOVER),
-        Button("← Retour", WIDTH // 2 - BUTTON_WIDTH // 2, 480, switch_to_main, ACCENT, ACCENT_HOVER),
-    ]
-
-    for btn in main_buttons:
-        btn.visible = True
 
     running = True
     while running:
-        screen.fill(SOFT_GRAY)
-        mouse_pos = pygame.mouse.get_pos()
+        screen.fill(DARK)
+        for y in range(HEIGHT):
+            pygame.draw.line(screen, (25 + y // 20, 30 + y // 15, 40 + y // 10), (0, y), (WIDTH, y))
 
-        title = font_title.render("Crimson Nexus", True, DARK_TEXT)
-        title_rect = title.get_rect(center=(WIDTH // 2, 150))
-        screen.blit(title, title_rect)
+        title = font_title.render("Crimson Nexus", True, WHITE)
+        screen.blit(title, (WIDTH // 2 - title.get_width() // 2, 120))
 
-        if state == "ia_choice":
-            buttons = ia_buttons
-        elif state == "multiplayer":
-            buttons = multiplayer_buttons
-        else:
-            buttons = main_buttons
+        buttons = main_buttons if state == "main" else mp_buttons
 
-        for button in buttons:
-            button.check_hover(mouse_pos)
-            button.animate_in(speed=12)
-            button.draw(screen)
+        mouse = pygame.mouse.get_pos()
+        for btn in buttons:
+            btn.check_hover(mouse)
+            btn.draw(screen)
 
-        if state == "multiplayer":
+        if state == "mp":
             ip_input.update(pygame.event.get())
-            ip_label = font_button.render("Adresse IP :", True, DARK_TEXT)
-            screen.blit(ip_label, (WIDTH // 2 - BUTTON_WIDTH // 2, 260))
-            screen.blit(ip_input.surface, (WIDTH // 2 - BUTTON_WIDTH // 2 + 150, 260))
+            ip_label = font_button.render("IP du serveur :", True, WHITE)
+            screen.blit(ip_label, (WIDTH // 2 - 160, 240))
+            screen.blit(ip_input.surface, (WIDTH // 2, 240))
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 quit_game()
             elif event.type == pygame.MOUSEBUTTONDOWN:
-                for button in buttons:
-                    button.check_click(mouse_pos)
+                for btn in buttons:
+                    btn.check_click(event.pos)
 
         pygame.display.flip()
         clock.tick(60)
