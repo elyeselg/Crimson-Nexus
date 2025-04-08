@@ -2,7 +2,6 @@ from core.pieces import Pawn, Rook, Knight, Bishop, Queen, King
 from core.move import Move
 import copy
 
-
 class Board:
     def __init__(self):
         self.board = [[None for _ in range(8)] for _ in range(8)]
@@ -19,7 +18,7 @@ class Board:
             "King": King
         }
         self.setup_board()
-        self._checking_check = False  # Pour bloquer le roque quand on vérifie l'échec
+        self._checking_check = False
 
     def setup_board(self):
         for col in range(8):
@@ -52,25 +51,22 @@ class Board:
         piece = self.board[start_row][start_col]
         captured = move.piece_captured
 
-        # === Roque ===
         if move.is_castling and isinstance(piece, King):
-            if end_col == 6:  # Petit roque
+            if end_col == 6:
                 self.board[end_row][5] = self.board[end_row][7]
                 self.board[end_row][7] = None
                 self.board[end_row][5].pos = (end_row, 5)
-            elif end_col == 2:  # Grand roque
+            elif end_col == 2:
                 self.board[end_row][3] = self.board[end_row][0]
                 self.board[end_row][0] = None
                 self.board[end_row][3].pos = (end_row, 3)
 
-        # === Prise en passant ===
         if move.is_en_passant and isinstance(piece, Pawn):
             capture_row = start_row
             capture_col = end_col
             captured = self.board[capture_row][capture_col]
             self.board[capture_row][capture_col] = None
 
-        # === Promotion ===
         if move.promotion and isinstance(piece, Pawn):
             promoted_piece = self.piece_classes[move.promotion](piece.color, (end_row, end_col))
             self.board[end_row][end_col] = promoted_piece
@@ -100,11 +96,18 @@ class Board:
 
     def get_valid_moves(self, piece):
         valid_moves = []
+
+        if piece is None:
+            return valid_moves
+
         for move in piece.get_legal_moves(self):
-            temp = self.copy()
-            temp.move_piece(copy.deepcopy(move))
-            if not temp.is_in_check(piece.color):
+            temp_board = self.copy()
+            temp_board.move_piece(move)
+
+            # Après le mouvement, ton roi ne doit pas être en échec
+            if not temp_board.is_in_check(piece.color):
                 valid_moves.append(move)
+
         return valid_moves
 
     def is_in_check(self, color):

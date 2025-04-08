@@ -1,8 +1,6 @@
 import pygame
-import threading
 from core.board import Board
 from core.move import Move
-from ai.base_ai import get_random_move
 from ui.draw import (
     load_images, draw_board, draw_pieces, highlight_squares,
     draw_move_history, draw_captured,
@@ -12,33 +10,36 @@ from ui.draw import (
 WIDTH, HEIGHT = 1000, 800
 SQUARE_SIZE = 800 // 8
 
-def run_game(difficulty="easy", network=None, is_host=False):
-    import ui.menu  # Import local pour éviter boucle circulaire
+def run_network_game(network, is_host=False):
+    import ui.menu
 
     pygame.init()
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
-    pygame.display.set_caption("Crimson Nexus – Partie locale")
+    pygame.display.set_caption("Crimson Nexus – Partie en ligne")
     clock = pygame.time.Clock()
 
-    def reset_game():
-        return Board(), None, None, [], False, "", None, False, None, None, None
-
-    board, selected_piece, selected_pos, legal_moves, game_over, message, winner, ai_thinking, ai_move, button_replay, button_menu = reset_game()
+    board = Board()
+    selected_piece = None
+    selected_pos = None
+    legal_moves = []
+    game_over = False
+    message = ""
+    winner = None
+    button_replay = None
+    button_menu = None
 
     load_images()
 
+    my_color = "white" if is_host else "black"
+    waiting_for_opponent = not is_host
+
     def receive_move(move):
+        nonlocal waiting_for_opponent, selected_piece, selected_pos, legal_moves
         board.move_piece(move)
-
-    if difficulty == "online":
-        network.on_receive = receive_move
-
-    running = True
-
-    def ai_logic():
-        nonlocal ai_move, ai_thinking
-        ai_move = get_random_move(board)
-        ai_thinking = False
+        waiting_for_opponent = False
+        selected_piece = None
+        selected_pos = None
+        legal_moves = []
 
     def is_insufficient_material(board):
         pieces = [p for row in board.board for p in row if p]
@@ -54,23 +55,14 @@ def run_game(difficulty="easy", network=None, is_host=False):
                 bishops = [p for p in pieces if p.__class__.__name__ == "Bishop"]
                 colors = [(b.pos[0] + b.pos[1]) % 2 for b in bishops]
                 if colors[0] == colors[1]:
-                    return True  # Deux fous sur cases de même couleur
+                    return True  # Deux fous sur même couleur
         return False
 
+    network.on_receive = receive_move
+
+    running = True
     while running:
         clock.tick(60)
-
-        # --- TOUR IA ---
-        if not game_over and difficulty == "easy" and board.turn == "black":
-            if not ai_thinking and ai_move is None:
-                ai_thinking = True
-                threading.Thread(target=ai_logic).start()
-            elif ai_move:
-                board.move_piece(ai_move)
-                ai_move = None
-                selected_piece = None
-                selected_pos = None
-                legal_moves = []
 
         # --- AFFICHAGE ---
         draw_board(screen)
@@ -102,7 +94,7 @@ def run_game(difficulty="easy", network=None, is_host=False):
             button_replay, button_menu = show_end_screen(screen, message, winner, white_taken, black_taken, white_score, black_score)
             pygame.display.update()
 
-            # 🔥 Bloquer jusqu'à action joueur
+            # 🔥 Bloquer ici jusqu'à clic
             waiting_click = True
             while waiting_click:
                 for event in pygame.event.get():
@@ -112,9 +104,11 @@ def run_game(difficulty="easy", network=None, is_host=False):
                     if event.type == pygame.MOUSEBUTTONDOWN:
                         x, y = event.pos
                         if button_replay and button_replay.collidepoint(x, y):
-                            return run_game(difficulty, network, is_host)
+                            return run_network_game(network, is_host)
                         elif button_menu and button_menu.collidepoint(x, y):
                             return ui.menu.run_menu(screen)
+
+                pygame.display.flip()
 
         pygame.display.flip()
 
@@ -123,7 +117,7 @@ def run_game(difficulty="easy", network=None, is_host=False):
             if event.type == pygame.QUIT:
                 running = False
 
-            elif not game_over and event.type == pygame.MOUSEBUTTONDOWN and not ai_thinking:
+            elif not game_over and not waiting_for_opponent and event.type == pygame.MOUSEBUTTONDOWN:
                 x, y = pygame.mouse.get_pos()
                 col = x // SQUARE_SIZE
                 row = y // SQUARE_SIZE
@@ -137,8 +131,8 @@ def run_game(difficulty="easy", network=None, is_host=False):
                     for move in legal_moves:
                         if move.end_pos == clicked_pos:
                             board.move_piece(move)
-                            if difficulty == "online" and network:
-                                network.send(move)
+                            network.send(move)
+                            waiting_for_opponent = True
                             move_made = True
                             break
 
@@ -146,12 +140,12 @@ def run_game(difficulty="easy", network=None, is_host=False):
                     selected_pos = None
                     legal_moves = []
 
-                    if not move_made and clicked_piece and clicked_piece.color == board.turn:
+                    if not move_made and clicked_piece and clicked_piece.color == my_color:
                         selected_piece = clicked_piece
                         selected_pos = clicked_pos
                         legal_moves = board.get_valid_moves(selected_piece)
                 else:
-                    if clicked_piece and clicked_piece.color == board.turn:
+                    if clicked_piece and clicked_piece.color == my_color:
                         selected_piece = clicked_piece
                         selected_pos = clicked_pos
                         legal_moves = board.get_valid_moves(selected_piece)
