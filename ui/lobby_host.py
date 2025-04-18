@@ -56,7 +56,6 @@ def lobby_host(screen):
             elif event.type == pygame.MOUSEBUTTONDOWN and start_enabled:
                 x, y = event.pos
                 if WIDTH // 2 - 100 <= x <= WIDTH // 2 + 100 and HEIGHT - 120 <= y <= HEIGHT - 70:
-                    # Envoie un signal de démarrage au client
                     server.send({"start": True})
                     run_network_game(server, is_host=True)
                     return
