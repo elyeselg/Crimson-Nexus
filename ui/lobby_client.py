@@ -17,10 +17,10 @@ def lobby_client(screen):
     clock = pygame.time.Clock()
     ip_input = pygame_textinput.TextInputVisualizer()
     pseudo_input = pygame_textinput.TextInputVisualizer()
+
     ip_input.value = "127.0.0.1"
     pseudo_input.value = "Client"
 
-    # Changer les couleurs d'affichage du texte
     ip_input.cursor_color = WHITE
     pseudo_input.cursor_color = WHITE
     ip_input.font_color = WHITE
@@ -36,6 +36,7 @@ def lobby_client(screen):
         try:
             client = GameClient(ip_input.value)
             client.connect()
+            client.on_receive = on_receive
             client.send({"pseudo": pseudo_input.value})
             connected = True
         except Exception as e:
@@ -56,15 +57,17 @@ def lobby_client(screen):
 
         for event in events:
             if event.type == pygame.QUIT:
+                if client:
+                    client.stop()
                 running = False
+
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN and not connected:
                 try_connect()
-                if client:
-                    client.on_receive = on_receive
 
         ip_input.update(events)
         pseudo_input.update(events)
 
+        # --- AFFICHAGE ---
         title = font_title.render("Lobby – Client", True, WHITE)
         ip_label = font_text.render("IP du serveur :", True, WHITE)
         pseudo_label = font_text.render("Ton pseudo :", True, WHITE)

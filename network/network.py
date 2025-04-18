@@ -6,10 +6,11 @@ import struct
 PORT = 5555
 BUFFER_SIZE = 4096
 
+# --- Fonctions pour envoi sécurisé de messages ---
 def send_msg(sock, data):
     try:
         serialized = pickle.dumps(data)
-        length = struct.pack('>I', len(serialized))  # 4 bytes header
+        length = struct.pack('>I', len(serialized))
         sock.sendall(length + serialized)
     except Exception as e:
         print("❌ Envoi échoué :", e)
@@ -20,8 +21,7 @@ def recv_msg(sock):
         if not raw_len:
             return None
         msg_len = struct.unpack('>I', raw_len)[0]
-        data = recvall(sock, msg_len)
-        return pickle.loads(data) if data else None
+        return pickle.loads(recvall(sock, msg_len))
     except:
         return None
 
@@ -34,6 +34,7 @@ def recvall(sock, n):
         data += packet
     return data
 
+# --- Serveur ---
 class GameServer:
     def __init__(self, host='0.0.0.0', port=PORT):
         self.host = host
@@ -49,18 +50,15 @@ class GameServer:
         self.socket.listen(1)
         print(f"[🟢 Serveur en attente sur {self.host}:{self.port}]")
 
-        def wait_for_client():
-            try:
-                self.conn, self.addr = self.socket.accept()
-                print(f"[🔗 Client connecté depuis {self.addr}]")
-                while self.running:
-                    data = recv_msg(self.conn)
-                    if data and self.on_receive:
-                        self.on_receive(data)
-            except Exception as e:
-                print("❌ Erreur serveur :", e)
+        def listen():
+            self.conn, self.addr = self.socket.accept()
+            print(f"[🔗 Client connecté depuis {self.addr}]")
+            while self.running:
+                data = recv_msg(self.conn)
+                if data and self.on_receive:
+                    self.on_receive(data)
 
-        threading.Thread(target=wait_for_client, daemon=True).start()
+        threading.Thread(target=listen, daemon=True).start()
 
     def send(self, data):
         if self.conn:
@@ -72,6 +70,7 @@ class GameServer:
             self.conn.close()
         self.socket.close()
 
+# --- Client ---
 class GameClient:
     def __init__(self, server_ip, port=PORT):
         self.server_ip = server_ip
@@ -83,7 +82,7 @@ class GameClient:
     def connect(self):
         try:
             self.socket.connect((self.server_ip, self.port))
-            print(f"[✅ Connecté au serveur {self.server_ip}:{self.port}]")
+            print(f"[✅ Connecté à {self.server_ip}:{self.port}]")
 
             def listen():
                 while self.running:

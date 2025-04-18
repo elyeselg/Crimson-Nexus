@@ -43,7 +43,6 @@ def lobby_host(screen):
         if isinstance(data, dict) and "pseudo" in data:
             client_name = data["pseudo"]
             start_enabled = True
-            server.send({"pseudo": pseudo_input.value})
 
     server.on_receive = on_receive
 
@@ -54,6 +53,7 @@ def lobby_host(screen):
         events = pygame.event.get()
         for event in events:
             if event.type == pygame.QUIT:
+                server.stop()
                 running = False
 
             elif event.type == pygame.MOUSEBUTTONDOWN and start_enabled:
@@ -65,6 +65,7 @@ def lobby_host(screen):
 
         pseudo_input.update(events)
 
+        # Textes
         title = font_title.render("Lobby – Hôte", True, WHITE)
         ip_label = font_text.render(f"Ton IP : {ip_address}", True, WHITE)
         pseudo_label = font_text.render("Ton pseudo :", True, WHITE)
