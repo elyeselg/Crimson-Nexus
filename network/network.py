@@ -6,14 +6,13 @@ import struct
 PORT = 5555
 BUFFER_SIZE = 4096
 
-# === UTILS pour communication sécurisée ===
 def send_msg(sock, data):
     try:
         serialized = pickle.dumps(data)
-        length = struct.pack('>I', len(serialized))  # 4 octets big-endian
+        length = struct.pack('>I', len(serialized))  # 4 bytes header
         sock.sendall(length + serialized)
     except Exception as e:
-        print("❌ Échec de l'envoi :", e)
+        print("❌ Envoi échoué :", e)
 
 def recv_msg(sock):
     try:
@@ -35,7 +34,6 @@ def recvall(sock, n):
         data += packet
     return data
 
-# === CLASSE SERVEUR ===
 class GameServer:
     def __init__(self, host='0.0.0.0', port=PORT):
         self.host = host
@@ -74,7 +72,6 @@ class GameServer:
             self.conn.close()
         self.socket.close()
 
-# === CLASSE CLIENT ===
 class GameClient:
     def __init__(self, server_ip, port=PORT):
         self.server_ip = server_ip

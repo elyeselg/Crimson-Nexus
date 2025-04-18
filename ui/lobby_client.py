@@ -20,6 +20,12 @@ def lobby_client(screen):
     ip_input.value = "127.0.0.1"
     pseudo_input.value = "Client"
 
+    # Changer les couleurs d'affichage du texte
+    ip_input.cursor_color = WHITE
+    pseudo_input.cursor_color = WHITE
+    ip_input.font_color = WHITE
+    pseudo_input.font_color = WHITE
+
     client = None
     host_name = None
     game_started = False
@@ -59,7 +65,6 @@ def lobby_client(screen):
         ip_input.update(events)
         pseudo_input.update(events)
 
-        # --- AFFICHAGE ---
         title = font_title.render("Lobby – Client", True, WHITE)
         ip_label = font_text.render("IP du serveur :", True, WHITE)
         pseudo_label = font_text.render("Ton pseudo :", True, WHITE)
