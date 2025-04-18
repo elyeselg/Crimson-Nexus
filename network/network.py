@@ -1,10 +1,41 @@
 import socket
 import threading
 import pickle
+import struct
 
 PORT = 5555
 BUFFER_SIZE = 4096
 
+# === UTILS pour communication sécurisée ===
+def send_msg(sock, data):
+    try:
+        serialized = pickle.dumps(data)
+        length = struct.pack('>I', len(serialized))  # 4 octets big-endian
+        sock.sendall(length + serialized)
+    except Exception as e:
+        print("❌ Échec de l'envoi :", e)
+
+def recv_msg(sock):
+    try:
+        raw_len = recvall(sock, 4)
+        if not raw_len:
+            return None
+        msg_len = struct.unpack('>I', raw_len)[0]
+        data = recvall(sock, msg_len)
+        return pickle.loads(data) if data else None
+    except:
+        return None
+
+def recvall(sock, n):
+    data = b''
+    while len(data) < n:
+        packet = sock.recv(n - len(data))
+        if not packet:
+            return None
+        data += packet
+    return data
+
+# === CLASSE SERVEUR ===
 class GameServer:
     def __init__(self, host='0.0.0.0', port=PORT):
         self.host = host
@@ -21,27 +52,21 @@ class GameServer:
         print(f"[🟢 Serveur en attente sur {self.host}:{self.port}]")
 
         def wait_for_client():
-            self.conn, self.addr = self.socket.accept()
-            print(f"[🔗 Client connecté depuis {self.addr}]")
-            while self.running:
-                try:
-                    data = self.conn.recv(BUFFER_SIZE)
-                    if data:
-                        move = pickle.loads(data)
-                        if self.on_receive:
-                            self.on_receive(move)
-                except:
-                    break
+            try:
+                self.conn, self.addr = self.socket.accept()
+                print(f"[🔗 Client connecté depuis {self.addr}]")
+                while self.running:
+                    data = recv_msg(self.conn)
+                    if data and self.on_receive:
+                        self.on_receive(data)
+            except Exception as e:
+                print("❌ Erreur serveur :", e)
 
         threading.Thread(target=wait_for_client, daemon=True).start()
 
-    def send(self, move):
+    def send(self, data):
         if self.conn:
-            try:
-                data = pickle.dumps(move)
-                self.conn.sendall(data)
-            except:
-                print("❌ Échec de l'envoi du coup.")
+            send_msg(self.conn, data)
 
     def stop(self):
         self.running = False
@@ -49,6 +74,7 @@ class GameServer:
             self.conn.close()
         self.socket.close()
 
+# === CLASSE CLIENT ===
 class GameClient:
     def __init__(self, server_ip, port=PORT):
         self.server_ip = server_ip
@@ -64,25 +90,16 @@ class GameClient:
 
             def listen():
                 while self.running:
-                    try:
-                        data = self.socket.recv(BUFFER_SIZE)
-                        if data:
-                            move = pickle.loads(data)
-                            if self.on_receive:
-                                self.on_receive(move)
-                    except:
-                        break
+                    data = recv_msg(self.socket)
+                    if data and self.on_receive:
+                        self.on_receive(data)
 
             threading.Thread(target=listen, daemon=True).start()
         except Exception as e:
             print(f"❌ Connexion échouée : {e}")
 
-    def send(self, move):
-        try:
-            data = pickle.dumps(move)
-            self.socket.sendall(data)
-        except:
-            print("❌ Échec de l'envoi du coup.")
+    def send(self, data):
+        send_msg(self.socket, data)
 
     def stop(self):
         self.running = False
