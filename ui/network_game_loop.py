@@ -1,6 +1,5 @@
 import pygame
 from core.board import Board
-from core.move import Move
 from ui.draw import (
     load_images, draw_board, draw_pieces, highlight_squares,
     draw_move_history, draw_captured,
@@ -41,23 +40,6 @@ def run_network_game(network, is_host=False):
         selected_pos = None
         legal_moves = []
 
-    def is_insufficient_material(board):
-        pieces = [p for row in board.board for p in row if p]
-        if len(pieces) == 2:
-            return True  # Roi contre Roi
-        if len(pieces) == 3:
-            types = [p.__class__.__name__ for p in pieces]
-            if "Bishop" in types or "Knight" in types:
-                return True  # Roi contre Roi + (Fou ou Cavalier)
-        if len(pieces) == 4:
-            types = [p.__class__.__name__ for p in pieces]
-            if types.count("Bishop") == 2:
-                bishops = [p for p in pieces if p.__class__.__name__ == "Bishop"]
-                colors = [(b.pos[0] + b.pos[1]) % 2 for b in bishops]
-                if colors[0] == colors[1]:
-                    return True  # Deux fous sur même couleur
-        return False
-
     network.on_receive = receive_move
 
     running = True
@@ -76,25 +58,17 @@ def run_network_game(network, is_host=False):
 
         # --- DETECTION FIN DE PARTIE ---
         if not game_over:
-            if board.is_checkmate(board.turn):
-                winner = "Blancs" if board.turn == "black" else "Noirs"
-                message = f"{winner} gagnent par échec et mat"
-                game_over = True
-            elif board.is_stalemate(board.turn):
-                winner = "Aucun"
-                message = "Match nul par pat"
-                game_over = True
-            elif is_insufficient_material(board):
-                winner = "Aucun"
-                message = "Match nul par matériel insuffisant"
+            winner, message = board.get_end_message()
+            if winner is not None:
                 game_over = True
 
         # --- AFFICHER ECRAN DE FIN ---
         if game_over and button_replay is None and button_menu is None:
-            button_replay, button_menu = show_end_screen(screen, message, winner, white_taken, black_taken, white_score, black_score)
+            button_replay, button_menu = show_end_screen(
+                screen, message, winner, white_taken, black_taken, white_score, black_score
+            )
             pygame.display.update()
 
-            # 🔥 Bloquer ici jusqu'à clic
             waiting_click = True
             while waiting_click:
                 for event in pygame.event.get():
@@ -107,7 +81,6 @@ def run_network_game(network, is_host=False):
                             return run_network_game(network, is_host)
                         elif button_menu and button_menu.collidepoint(x, y):
                             return ui.menu.run_menu(screen)
-
                 pygame.display.flip()
 
         pygame.display.flip()

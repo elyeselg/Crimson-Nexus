@@ -1,52 +1,47 @@
 import pygame
 import sys
-import pygame_textinput
 from ui.game_loop import run_game
 from ui.lobby_host import lobby_host
 from ui.lobby_client import lobby_client
 
-
-
 # === CONFIG ===
 WIDTH, HEIGHT = 1000, 800
-BUTTON_WIDTH, BUTTON_HEIGHT = 320, 70
-BUTTON_RADIUS = 14
+BUTTON_WIDTH = 360
+BUTTON_HEIGHT = 60
+BUTTON_SPACING = 80
 
 # === COULEURS ===
-WHITE = (255, 255, 255)
-DARK = (25, 25, 25)
-HIGHLIGHT = (0, 120, 240)
-SOFT_BLUE = (100, 160, 255)
-GRAY = (180, 180, 180)
+BG_COLOR = (25, 25, 35)
+TEXT_COLOR = (240, 240, 240)
+ACCENT = (255, 215, 120)
+HOVER_COLOR = (70, 70, 90)
 
 pygame.font.init()
-font_title = pygame.font.SysFont("segoeui", 64, bold=True)
-font_button = pygame.font.SysFont("segoeui", 28)
+font_title = pygame.font.SysFont("Segoe UI", 66, bold=True)
+font_button = pygame.font.SysFont("Segoe UI", 30)
 
 def quit_game():
     pygame.quit()
     sys.exit()
 
-def load_icon(path, size=(40, 40)):
-    img = pygame.image.load(path).convert_alpha()
-    return pygame.transform.smoothscale(img, size)
-
-class IconButton:
-    def __init__(self, text, icon_path, y, callback, color=HIGHLIGHT):
+class ElegantButton:
+    def __init__(self, text, y, callback):
         self.text = text
-        self.icon = load_icon(icon_path)
         self.callback = callback
-        self.color = color
-        self.hover_color = tuple(min(c + 40, 255) for c in color)
-        self.hovered = False
+        self.y = y
         self.rect = pygame.Rect(WIDTH // 2 - BUTTON_WIDTH // 2, y, BUTTON_WIDTH, BUTTON_HEIGHT)
+        self.hovered = False
 
     def draw(self, surface):
-        bg = self.hover_color if self.hovered else self.color
-        pygame.draw.rect(surface, bg, self.rect, border_radius=BUTTON_RADIUS)
-        surface.blit(self.icon, (self.rect.x + 15, self.rect.y + 15))
-        text_surface = font_button.render(self.text, True, WHITE)
-        surface.blit(text_surface, (self.rect.x + 70, self.rect.y + (BUTTON_HEIGHT - text_surface.get_height()) // 2))
+        color = HOVER_COLOR if self.hovered else (40, 40, 60)
+        pygame.draw.rect(surface, color, self.rect, border_radius=10)
+        pygame.draw.rect(surface, ACCENT, self.rect, width=2, border_radius=10)
+
+        text_surface = font_button.render(self.text, True, TEXT_COLOR)
+        surface.blit(text_surface, (
+            self.rect.centerx - text_surface.get_width() // 2,
+            self.rect.centery - text_surface.get_height() // 2
+        ))
 
     def check_hover(self, pos):
         self.hovered = self.rect.collidepoint(pos)
@@ -75,26 +70,27 @@ def run_menu(screen):
         nonlocal state
         state = new
 
+    # === BOUTONS ===
     main_buttons = [
-        IconButton("Jouer contre l'IA", "assets/icons/ai.png", 300, start_vs_ai),
-        IconButton("Multijoueur", "assets/icons/multiplayer.png", 390, lambda: switch_state("mp")),
-        IconButton("Quitter", "assets/icons/quit.png", 480, quit_game)
+        ElegantButton("Jouer contre l'IA", 320, start_vs_ai),
+        ElegantButton("Multijoueur", 320 + BUTTON_SPACING, lambda: switch_state("mp")),
+        ElegantButton("Quitter", 320 + 2 * BUTTON_SPACING, quit_game)
     ]
 
     mp_buttons = [
-        IconButton("Créer un salon", "assets/icons/multiplayer.png", 300, start_lobby_host, HIGHLIGHT),
-        IconButton("Rejoindre un salon", "assets/icons/multiplayer.png", 390, start_lobby_client, SOFT_BLUE),
-        IconButton("← Retour", "assets/icons/back.png", 490, lambda: switch_state("main"), GRAY)
+        ElegantButton("Créer un salon", 320, start_lobby_host),
+        ElegantButton("Rejoindre un salon", 320 + BUTTON_SPACING, start_lobby_client),
+        ElegantButton("← Retour", 320 + 2 * BUTTON_SPACING, lambda: switch_state("main"))
     ]
 
     while True:
-        screen.fill(DARK)
-        for y in range(HEIGHT):
-            pygame.draw.line(screen, (25 + y // 20, 30 + y // 15, 40 + y // 10), (0, y), (WIDTH, y))
+        screen.fill(BG_COLOR)
 
-        title = font_title.render("Crimson Nexus", True, WHITE)
-        screen.blit(title, (WIDTH // 2 - title.get_width() // 2, 120))
+        # === Titre ===
+        title_surface = font_title.render("Crimson Nexus", True, ACCENT)
+        screen.blit(title_surface, (WIDTH // 2 - title_surface.get_width() // 2, 140))
 
+        # === Events ===
         events = pygame.event.get()
         mouse = pygame.mouse.get_pos()
 
@@ -105,6 +101,7 @@ def run_menu(screen):
                 for btn in main_buttons if state == "main" else mp_buttons:
                     btn.check_click(event.pos)
 
+        # === Boutons ===
         buttons = main_buttons if state == "main" else mp_buttons
         for btn in buttons:
             btn.check_hover(mouse)
