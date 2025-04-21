@@ -26,6 +26,16 @@ Le jeu implémente **toutes les règles officielles** : roque, prise en passant,
 
 ---
 
+## ✨ Points techniques notables
+
+-  L’IA utilise un thread Python pour réfléchir sans bloquer l’affichage
+
+-  La communication réseau passe par un protocole TCP custom avec pickle
+
+-  Le projet respecte une séparation claire entre logique (core), affichage (ui) et réseau
+
+---
+
 ## 🛠️ Installation et lancement
 
 ### 🔧 Dépendances
@@ -77,10 +87,3 @@ Crimson Nexus/
 
 
 
-## ✨ Points techniques notables
-
--  L’IA utilise un thread Python pour réfléchir sans bloquer l’affichage
-
--  La communication réseau passe par un protocole TCP custom avec pickle
-
--  Le projet respecte une séparation claire entre logique (core), affichage (ui) et réseau
