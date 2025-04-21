@@ -37,13 +37,13 @@ pip install pygame pygame_textinput
 
 
 
-###▶️ Lancer le jeu
+### ▶️ Lancer le jeu
 
 Assurez-vous que votre terminal pointe vers le dossier racine, puis exécutez :
 
 python main.py
 
-###🗂️ Structure du projet
+### 🗂️ Structure du projet
 
 Crimson Nexus/
  main.py                  # Point d’entrée principal du jeu
