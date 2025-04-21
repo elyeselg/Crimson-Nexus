@@ -1,6 +1,6 @@
 # ♟️ Crimson Nexus
 
-> Jeu d'échecs moderne en Python avec interface graphique, mode local contre IA et multijoueur en ligne.
+ Jeu d'échecs moderne en Python avec interface graphique, mode local contre IA et multijoueur en ligne.
 
 ---
 
@@ -85,9 +85,3 @@ Crimson Nexus/
 -  La communication réseau passe par un protocole TCP custom avec pickle
 
 -  Le projet respecte une séparation claire entre logique (core), affichage (ui) et réseau
-
-  
-
-📄 Licence
-
-Projet académique – distribution ou réutilisation restreinte aux encadrants.
