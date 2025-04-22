@@ -54,17 +54,23 @@ class Board:
         start_row, start_col = move.start_pos
         end_row, end_col = move.end_pos
         piece = self.board[start_row][start_col]
+
+        if piece is None:
+            return  # sécurité en cas de bug réseau
+
         captured = move.piece_captured
 
         if move.is_castling and isinstance(piece, King):
             if end_col == 6:
                 self.board[end_row][5] = self.board[end_row][7]
                 self.board[end_row][7] = None
-                self.board[end_row][5].pos = (end_row, 5)
+                if self.board[end_row][5]:
+                    self.board[end_row][5].pos = (end_row, 5)
             elif end_col == 2:
                 self.board[end_row][3] = self.board[end_row][0]
                 self.board[end_row][0] = None
-                self.board[end_row][3].pos = (end_row, 3)
+                if self.board[end_row][3]:
+                    self.board[end_row][3].pos = (end_row, 3)
 
         if move.is_en_passant and isinstance(piece, Pawn):
             capture_row = start_row
@@ -102,10 +108,13 @@ class Board:
             return []
         valid = []
         for move in piece.get_legal_moves(self):
-            temp = self.copy()
-            temp.move_piece(move)
-            if not temp.is_in_check(piece.color):
-                valid.append(move)
+            try:
+                temp = self.copy()
+                temp.move_piece(move)
+                if not temp.is_in_check(piece.color):
+                    valid.append(move)
+            except Exception as e:
+                print(f"[⚠️ ERREUR get_valid_moves] move={move} : {e}")
         return valid
 
     def is_in_check(self, color):
